@@ -1,0 +1,34 @@
+# Aklypse Project Root .gitignore
+# === ArcMoon Studios ===
+# Rust/Cargo
+/target/
+**/*.rs.bk
+**/*.swp
+**/*.swo
+**/*.tmp
+Cargo.lock
+# IDEs
+.vscode/
+.idea/
+*.code-workspace
+# OS
+.DS_Store
+Thumbs.db
+# Logs
+*.log
+logs/
+# Node (frontend)
+frontend/node_modules/
+frontend/dist/
+# Python
+*.pyc
+__pycache__/
+# Misc
+*.bak
+*.old
+*.orig
+*.rej
+# Coverage
+coverage/
+# Test output
+test-output/

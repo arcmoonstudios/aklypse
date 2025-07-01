@@ -1,0 +1,360 @@
+{
+  "aklypse/src/common/error.rs": {
+    "module_purpose": "Defines the unified error handling framework for Aklypse, incorporating features from DecrustError for rich context, reporting, circuit breaking, and autocorrection suggestions.",
+    "structs": [
+      {
+        "name": "ErrorSource",
+        "fields": [
+          {"name": "file", "type": "String"},
+          {"name": "line", "type": "u32"},
+          {"name": "module_path", "type": "String"},
+          {"name": "column", "type": "Option<u32>"},
+          {"name": "function", "type": "Option<String>"}
+        ],
+        "description": "Describes the source location of an error."
+      },
+      {
+        "name": "ErrorContext",
+        "fields": [
+          {"name": "message", "type": "String"},
+          {"name": "source_location", "type": "Option<ErrorSource>"},
+          {"name": "recovery_suggestion", "type": "Option<String>"},
+          {"name": "metadata", "type": "HashMap<String, String>"},
+          {"name": "severity", "type": "ErrorSeverity"},
+          {"name": "timestamp", "type": "Option<TimestampType>"}, // TimestampType is DateTime<Utc> or SystemTime based on feature
+          {"name": "correlation_id", "type": "Option<String>"},
+          {"name": "component", "type": "Option<String>"},
+          {"name": "tags", "type": "Vec<String>"},
+          {"name": "diagnostic_info", "type": "Option<DiagnosticResult>"}
+        ],
+        "description": "Additional structured context for an error."
+      },
+      {
+        "name": "ErrorLocation",
+        "fields": [
+            {"name": "file", "type": "String"}, {"name": "line", "type": "u32"},
+            {"name": "column", "type": "u32"}, {"name": "function_context", "type": "String"},
+            {"name": "snafu_variant", "type": "Option<String>"}
+        ],
+        "description": "Specific location for diagnostic purposes."
+      },
+      {
+        "name": "MacroExpansion",
+        "fields": [
+            {"name": "macro_name", "type": "String"}, {"name": "expansion_site", "type": "ErrorLocation"},
+            {"name": "generated_code_snippet", "type": "String"}
+        ],
+        "description": "A step in a macro expansion trace."
+      },
+      {
+        "name": "DiagnosticResult",
+        "fields": [
+            {"name": "primary_location", "type": "Option<ErrorLocation>"},
+            {"name": "expansion_trace", "type": "Vec<MacroExpansion>"},
+            {"name": "suggested_fixes", "type": "Vec<String>"},
+            {"name": "original_message", "type": "Option<String>"},
+            {"name": "diagnostic_code", "type": "Option<String>"}
+        ],
+        "description": "Holds detailed diagnostic information."
+      },
+      {
+        "name": "ErrorReportConfig",
+        "fields": [
+          {"name": "include_message", "type": "bool"},
+          {"name": "include_source_chain", "type": "bool"},
+          {"name": "include_backtrace", "type": "bool"},
+          {"name": "include_rich_context", "type": "bool"},
+          {"name": "include_source_location", "type": "bool"},
+          {"name": "include_severity", "type": "bool"},
+          {"name": "format", "type": "ErrorReportFormat"},
+          {"name": "max_chain_depth", "type": "Option<usize>"},
+          {"name": "pretty_print_json", "type": "bool"},
+          {"name": "include_diagnostics", "type": "bool"}
+        ],
+        "description": "Configuration for the error reporter."
+      },
+      {
+        "name": "ErrorReporter",
+        "fields": [],
+        "description": "Utility for generating formatted error reports."
+      },
+      {
+        "name": "CircuitBreakerConfig",
+        "fields": [
+          {"name": "failure_threshold", "type": "usize"},
+          {"name": "failure_rate_threshold", "type": "f64"},
+          {"name": "minimum_request_threshold_for_rate", "type": "usize"},
+          {"name": "success_threshold_to_close", "type": "usize"},
+          {"name": "reset_timeout", "type": "Duration"},
+          {"name": "half_open_max_concurrent_operations", "type": "usize"},
+          {"name": "operation_timeout", "type": "Option<Duration>"},
+          {"name": "sliding_window_size", "type": "usize"},
+          {"name": "error_predicate", "type": "Option<Arc<dyn Fn(&AklypseError) -> bool + Send + Sync>>"}, // AklypseError here
+          {"name": "metrics_history_size", "type": "usize"},
+          {"name": "track_metrics", "type": "bool"},
+          {"name": "slow_call_duration_threshold", "type": "Option<Duration>"},
+          {"name": "slow_call_rate_threshold", "type": "Option<f64>"}
+        ],
+        "description": "Configuration for the CircuitBreaker."
+      },
+      {
+        "name": "CircuitBreaker",
+        "fields": [
+          {"name": "name", "type": "String"},
+          {"name": "config", "type": "CircuitBreakerConfig"},
+          {"name": "inner", "type": "RwLock<InnerState>"}, // InnerState contains state, opened_at, etc.
+          {"name": "observers", "type": "Mutex<Vec<Arc<dyn CircuitBreakerObserver>>>"}
+        ],
+        "description": "Circuit breaker implementation."
+      },
+      {
+        "name": "CircuitMetrics",
+        "fields": [
+            {"name": "state", "type": "CircuitState"}, {"name": "total_requests", "type": "u64"},
+            {"name": "successful_requests", "type": "u64"}, {"name": "failed_requests", "type": "u64"},
+            {"name": "rejected_requests", "type": "u64"}, {"name": "timeout_requests", "type": "u64"},
+            {"name": "consecutive_failures", "type": "u32"}, {"name": "consecutive_successes", "type": "u32"},
+            {"name": "last_error_timestamp", "type": "Option<SystemTime>"},
+            {"name": "last_transition_timestamp", "type": "Option<SystemTime>"},
+            {"name": "failure_rate_in_window", "type": "Option<f64>"},
+            {"name": "slow_call_rate_in_window", "type": "Option<f64>"}
+        ],
+        "description": "Metrics collected by the circuit breaker."
+      },
+      {
+        "name": "Autocorrection",
+        "fields": [
+          {"name": "description", "type": "String"},
+          {"name": "fix_type", "type": "FixType"},
+          {"name": "confidence", "type": "f64"},
+          {"name": "details", "type": "Option<FixDetails>"},
+          {"name": "diff_suggestion", "type": "Option<String>"},
+          {"name": "commands_to_apply", "type": "Vec<String>"},
+          {"name": "targets_error_code", "type": "Option<String>"}
+        ],
+        "description": "A proposed autocorrection for an error."
+      },
+      {
+        "name": "Decrust",
+        "fields": [],
+        "description": "Main struct for Decrust autocorrection capabilities."
+      }
+    ],
+    "enums": [
+      {
+        "name": "AklypseError", // Using the snafu-based Error from DecrustError.txt as AklypseError
+        "variants": [
+          {"name": "Io", "fields": [{"name": "source", "type": "Arc<std::io::Error>"}, {"name": "path", "type": "Option<PathBuf>"}, {"name": "operation", "type": "String"}, {"name": "backtrace", "type": "Backtrace"}]},
+          {"name": "Parse", "fields": [{"name": "source", "type": "Box<dyn std::error::Error + Send + Sync + 'static>"}, {"name": "kind", "type": "String"}, {"name": "context_info", "type": "String"}, {"name": "backtrace", "type": "Backtrace"}]},
+          {"name": "Network", "fields": [{"name": "source", "type": "Box<dyn std::error::Error + Send + Sync + 'static>"}, {"name": "url", "type": "Option<String>"}, {"name": "kind", "type": "String"}, {"name": "backtrace", "type": "Backtrace"}]},
+          {"name": "Config", "fields": [{"name": "message", "type": "String"}, {"name": "path", "type": "Option<PathBuf>"}, {"name": "source", "type": "Option<Box<dyn std::error::Error + Send + Sync + 'static>>"}, {"name": "backtrace", "type": "Backtrace"}]},
+          {"name": "Validation", "fields": [{"name": "field", "type": "String"}, {"name": "message", "type": "String"}, {"name": "backtrace", "type": "Backtrace"}]},
+          {"name": "Internal", "fields": [{"name": "message", "type": "String"}, {"name": "source", "type": "Option<Box<dyn std::error::Error + Send + Sync + 'static>>"}, {"name": "backtrace", "type": "Backtrace"}]},
+          {"name": "CircuitBreakerOpen", "fields": [{"name": "name", "type": "String"}, {"name": "retry_after", "type": "Option<Duration>"}, {"name": "backtrace", "type": "Backtrace"}]},
+          {"name": "Timeout", "fields": [{"name": "operation", "type": "String"}, {"name": "duration", "type": "Duration"}, {"name": "backtrace", "type": "Backtrace"}]},
+          // ... Other variants from DecrustError.txt ...
+          {"name": "DkgSpecificError", "fields": [{"name": "message", "type": "String"}, {"name": "context", "type": "ErrorContext"}, {"name": "backtrace", "type": "Backtrace"}]}, // Example of adding more specific error types if needed
+          {"name": "WithRichContext", "fields": [{"name": "context", "type": "ErrorContext"}, {"name": "source", "type": "Box<AklypseError>"}, {"name": "backtrace", "type": "Backtrace"}]},
+          {"name": "Whatever", "fields": [{"name": "message", "type": "String"}, {"name": "source", "type": "Option<Box<dyn std::error::Error + Send + Sync + 'static>>"}, {"name": "backtrace", "type": "Option<Backtrace>"}]}
+        ],
+        "description": "Unified error type for Aklypse, based on Snafu. Replaces the one previously defined in common/error.rs from skeleton if this is preferred."
+      },
+      {
+        "name": "ErrorSeverity",
+        "variants": ["Debug", "Info", "Warning", "Error", "Critical"],
+        "description": "Severity level for errors."
+      },
+      {
+        "name": "ErrorCategory",
+        "variants": ["Io", "Parsing", "Network", "Configuration", "Validation", "Internal", "CircuitBreaker", "Timeout", "ResourceExhaustion", "NotFound", "Concurrency", "ExternalService", "Authentication", "Authorization", "StateConflict", "Multiple", "Unspecified"],
+        "description": "Categorization of errors."
+      },
+      {
+        "name": "ErrorReportFormat",
+        "variants": ["Plain", "Json", "Markdown", "Html"],
+        "description": "Output formats for error reports."
+      },
+      {
+        "name": "CircuitState",
+        "variants": ["Closed", "Open", "HalfOpen"],
+        "description": "State of the circuit breaker."
+      },
+      {
+        "name": "CircuitOperationType",
+        "variants": ["Success", "Failure", "Rejected", "Timeout"],
+        "description": "Type of circuit breaker operation outcome."
+      },
+      {
+        "name": "FixType",
+        "variants": ["TextReplacement", "AstModification", "AddImport", "AddDependency", "ConfigurationChange", "ExecuteCommand", "Refactor", "ManualInterventionRequired", "Information", "UpdateCargoToml", "RunCargoCommand", "SuggestAlternativeMethod"],
+        "description": "Nature of a proposed autocorrection fix."
+      },
+      {
+        "name": "FixDetails",
+        "variants": [
+          {"name": "TextReplace", "fields": [/* ... */]},
+          {"name": "AddImport", "fields": [/* ... */]},
+          {"name": "AddCargoDependency", "fields": [/* ... */]},
+          {"name": "RunCommand", "fields": [/* ... */]},
+          {"name": "SuggestCodeChange", "fields": [/* ... */]}
+        ],
+        "description": "Detailed information for specific fix types."
+      }
+    ],
+    "traits": [
+      {
+        "name": "ResultExt<T, E_Orig>",
+        "methods": [
+          {"name": "context_msg", "parameters": [{"name": "self"}, {"name": "message", "type": "impl Into<String>"}], "return_type": "Result<T, AklypseError>"},
+          {"name": "context_rich", "parameters": [{"name": "self"}, {"name": "context", "type": "ErrorContext"}], "return_type": "Result<T, AklypseError>"}
+        ],
+        "description": "Extension trait for `std::result::Result` to add context."
+      },
+      {
+        "name": "OptionExt<T>",
+        "methods": [
+          {"name": "ok_or_snafu_", "parameters": [{"name": "self"}, {"name": "snafu_builder", "type": "/* Appropriate Snafu Builder for MissingValue */"}], "return_type": "Result<T, AklypseError>"},
+          {"name": "ok_or_missing_value", "parameters": [{"name": "self"}, {"name": "item_description", "type": "impl Into<String>"}], "return_type": "Result<T, AklypseError>"}
+        ],
+        "description": "Extension trait for `Option` to convert to Result with error."
+      },
+      {
+          "name": "CircuitBreakerObserver",
+          "methods": [
+              {"name": "on_state_change", "parameters": [{"name": "&self"}, {"name": "name", "type": "&str"}, {"name": "event", "type": "&CircuitTransitionEvent"}], "return_type": "void"},
+              {"name": "on_operation_attempt", "parameters": [{"name": "&self"}, {"name": "name", "type": "&str"}, {"name": "state", "type": "CircuitState"}], "return_type": "void"},
+              {"name": "on_operation_result", "parameters": [{"name": "&self"}, {"name": "name", "type": "&str"}, {"name": "op_type", "type": "CircuitOperationType"}, {"name": "duration", "type": "Duration"}, {"name": "error", "type": "Option<&AklypseError>"}], "return_type": "void"},
+              {"name": "on_reset", "parameters": [{"name": "&self"}, {"name": "name", "type": "&str"}], "return_type": "void"}
+          ],
+          "description": "Observer trait for circuit breaker events."
+      },
+      {
+          "name": "AutocorrectableError",
+          "methods": [
+              {"name": "suggest_autocorrection", "parameters": [{"name": "&self"}, {"name": "decrust_engine", "type": "&Decrust"}, {"name": "source_code_context", "type": "Option<&str>"}], "return_type": "Option<Autocorrection>"},
+              {"name": "get_diagnostic_info", "parameters": [{"name": "&self"}], "return_type": "Option<&DiagnosticResult>"}
+          ],
+          "description": "Trait to extend error types with autocorrection capabilities."
+      }
+    ],
+    "functions": [
+      // Potentially helper functions for creating specific Error variants.
+      // ErrorReporter::report and its variants.
+      // CircuitBreaker::new, execute, execute_async, etc.
+      // Decrust::new, suggest_autocorrection.
+    ],
+    "constants": [],
+    "type_aliases": [
+      {"name": "Result<T, E = AklypseError>", "definition": "std::result::Result<T, E>"}
+    ]
+  }
+  // ... other files will follow a similar pattern ...
+}
+
+
+{
+  "aklypse/src/common/error/mod.rs": {
+    "module_purpose": "Defines the unified error handling framework for Aklypse. Contains the main AklypseError enum (Snafu-based), core error extension traits, and re-exports key types from submodules.",
+    "structs": [
+        // No structs are typically defined directly in a `mod.rs` that primarily re-exports and defines a central enum/trait.
+        // Structs like ErrorContext, ErrorSource, etc., are in `types.rs`.
+        // CircuitBreakerConfig, ErrorReportConfig, etc., are in their respective files.
+    ],
+    "enums": [
+      {
+        "name": "AklypseError", // This is the `Error` enum from DecrustError.txt
+        "snafu_attributes": ["#[derive(Debug, Snafu)]", "#[snafu(visibility(pub(crate)))]"],
+        "variants": [
+          {"name": "Io", "fields": [{"name": "source", "type": "Arc<std::io::Error>"}, {"name": "path", "type": "Option<PathBuf>"}, {"name": "operation", "type": "String"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "Parse", "fields": [{"name": "source", "type": "Box<dyn std::error::Error + Send + Sync + 'static>"}, {"name": "kind", "type": "String"}, {"name": "context_info", "type": "String"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "Network", "fields": [{"name": "source", "type": "Box<dyn std::error::Error + Send + Sync + 'static>"}, {"name": "url", "type": "Option<String>"}, {"name": "kind", "type": "String"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "Config", "fields": [{"name": "message", "type": "String"}, {"name": "path", "type": "Option<PathBuf>"}, {"name": "source", "type": "Option<Box<dyn std::error::Error + Send + Sync + 'static>>"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "Validation", "fields": [{"name": "field", "type": "String"}, {"name": "message", "type": "String"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "Internal", "fields": [{"name": "message", "type": "String"}, {"name": "source", "type": "Option<Box<dyn std::error::Error + Send + Sync + 'static>>"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "CircuitBreakerOpen", "fields": [{"name": "name", "type": "String"}, {"name": "retry_after", "type": "Option<Duration>"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "Timeout", "fields": [{"name": "operation", "type": "String"}, {"name": "duration", "type": "Duration"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "ResourceExhausted", "fields": [{"name": "resource", "type": "String"}, {"name": "limit", "type": "String"}, {"name": "current", "type": "String"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "NotFound", "fields": [{"name": "resource_type", "type": "String"}, {"name": "identifier", "type": "String"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "StateConflict", "fields": [{"name": "message", "type": "String"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "Concurrency", "fields": [{"name": "message", "type": "String"}, {"name": "source", "type": "Option<Box<dyn std::error::Error + Send + Sync + 'static>>"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "ExternalService", "fields": [{"name": "service_name", "type": "String"}, {"name": "message", "type": "String"}, {"name": "source", "type": "Option<Box<dyn std::error::Error + Send + Sync + 'static>>"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "MissingValue", "fields": [{"name": "item_description", "type": "String"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "MultipleErrors", "fields": [{"name": "errors", "type": "Vec<AklypseError>"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          // Aklypse-specific top-level errors can be added here if the existing categories are not sufficient
+          // For example:
+          // {"name": "DkgError", "fields": [{"name": "message", "type": "String"}, {"name": "context", "type": "types::ErrorContext"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          // {"name": "StrategyExecutionError", "fields": [{"name": "strategy_id", "type": "String"}, {"name": "reason", "type": "String"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "WithRichContext", "fields": [{"name": "context", "type": "types::ErrorContext"}, {"name": "source", "type": "Box<AklypseError>"}, {"name": "backtrace", "type": "snafu::Backtrace"}]},
+          {"name": "Whatever", "fields": [{"name": "message", "type": "String"}, {"name": "source", "type": "Option<Box<dyn std::error::Error + Send + Sync + 'static>>"}, {"name": "backtrace", "type": "Option<snafu::Backtrace>"}]}
+        ],
+        "description": "Unified error type for Aklypse, based on Snafu. This is the central error type."
+      }
+    ],
+    "traits": [
+      {
+        "name": "ResultExt<T, E_Orig>",
+        "methods": [
+          {"name": "context_msg", "parameters": [{"name": "self"}, {"name": "message", "type": "impl Into<String>"}], "return_type": "Result<T, AklypseError>"},
+          {"name": "context_rich", "parameters": [{"name": "self"}, {"name": "context", "type": "types::ErrorContext"}], "return_type": "Result<T, AklypseError>"}
+        ],
+        "description": "Extension trait for `std::result::Result` to add context to AklypseError."
+      },
+      {
+        "name": "OptionExt<T>",
+        "methods": [
+          // ok_or_snafu_ might be tricky to represent generically without the specific Snafu builder type.
+          // We'll represent the more common case.
+          {"name": "ok_or_missing_value", "parameters": [{"name": "self"}, {"name": "item_description", "type": "impl Into<String>"}], "return_type": "Result<T, AklypseError>"}
+        ],
+        "description": "Extension trait for `Option` to convert to Result with a MissingValue AklypseError."
+      },
+      {
+          "name": "AutocorrectableError", // This trait itself would be defined in decrust.rs
+          "methods": [
+              {"name": "suggest_autocorrection", "parameters": [{"name": "&self"}, {"name": "decrust_engine", "type": "&decrust::Decrust"}, {"name": "source_code_context", "type": "Option<&str>"}], "return_type": "Option<types::Autocorrection>"},
+              {"name": "get_diagnostic_info", "parameters": [{"name": "&self"}], "return_type": "Option<&types::DiagnosticResult>"}
+          ],
+          "description": "Trait implemented by AklypseError to provide autocorrection suggestions."
+      }
+    ],
+    "functions": [
+        // AklypseError::add_context (instance method)
+        // AklypseError::category (instance method)
+        // AklypseError::severity (instance method)
+        // AklypseError::get_rich_context (instance method)
+    ],
+    "constants": [],
+    "type_aliases": [
+      {"name": "Result<T, E = AklypseError>", "definition": "std::result::Result<T, E>"}
+    ],
+    "module_declarations": ["circuitbreaker", "decrust", "reporter", "types"],
+    "re_exports": [
+        {"name": "ErrorContext", "from": "types::ErrorContext"},
+        {"name": "ErrorSource", "from": "types::ErrorSource"},
+        {"name": "ErrorSeverity", "from": "types::ErrorSeverity"},
+        {"name": "ErrorCategory", "from": "types::ErrorCategory"},
+        {"name": "DiagnosticResult", "from": "types::DiagnosticResult"},
+        {"name": "Autocorrection", "from": "types::Autocorrection"},
+        {"name": "FixType", "from": "types::FixType"},
+        {"name": "FixDetails", "from": "types::FixDetails"},
+        {"name": "ErrorReporter", "from": "reporter::ErrorReporter"},
+        {"name": "ErrorReportConfig", "from": "reporter::ErrorReportConfig"},
+        {"name": "CircuitBreaker", "from": "circuitbreaker::CircuitBreaker"},
+        {"name": "CircuitBreakerConfig", "from": "circuitbreaker::CircuitBreakerConfig"},
+        {"name": "CircuitState", "from": "circuitbreaker::CircuitState"},
+        {"name": "Decrust", "from": "decrust::Decrust"}
+        // Potentially specific Snafu builders if they are re-exported for convenience
+    ],
+    "uses": [
+        "snafu::{self, prelude::*, Backtrace, ErrorCompat, Snafu}",
+        "std::sync::Arc",
+        "std::path::PathBuf",
+        "std::time::Duration",
+        // ... other necessary imports from DecrustError.txt ...
+        "super::types", // To access ErrorContext, etc. from types.rs
+        "super::circuitbreaker",
+        "super::decrust",
+        "super::reporter"
+    ]
+  }
+}

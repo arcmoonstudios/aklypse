@@ -1,0 +1,7 @@
+# Arbitrage crate .gitignore
+/target/
+*.rs.bk
+*.swp
+*.swo
+*.tmp
+*.log
